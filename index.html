@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Registro a cursos</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #edf2fa;
+            color: #1b2b42;
+            margin: 0;
+        }
+
+        main {
+            max-width: 980px;
+            margin: 35px auto;
+            padding: 25px;
+        }
+
+        .panel {
+            background: white;
+            padding: 25px;
+            margin: 20px 0;
+            border-radius: 15px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 7px;
+            font-weight: bold;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 11px;
+            border: 1px solid #aaa;
+            border-radius: 7px;
+        }
+
+        button {
+            border: none;
+            padding: 11px 17px;
+            border-radius: 7px;
+            cursor: pointer;
+            background: #235ec0;
+            color: white;
+            margin: 5px;
+        }
+
+        .editar {
+            background: #21845b;
+        }
+
+        .eliminar {
+            background: #bd3039;
+        }
+
+        .secundario {
+            background: #dce6f6;
+            color: #1b2b42;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+
+        .tabla {
+            overflow-x: auto;
+        }
+
+        .online {
+            color: green;
+            font-weight: bold;
+        }
+
+        .offline {
+            color: #b46a00;
+            font-weight: bold;
+        }
+
+        #mensaje {
+            margin-top: 15px;
+        }
+
+        @media (max-width: 620px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            main {
+                margin: 0;
+                padding: 12px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<main>
+    <h1>Registro a cursos</h1>
+
+    <p>Práctica de JavaScript, localStorage y Supabase</p>
+
+    <p>
+        Conexión:
+        <strong id="conexion">Comprobando...</strong>
+    </p>
+
+    <section class="panel">
+
+        <h2>Formulario</h2>
+
+        <form id="registro">
+
+            <div class="grid">
+
+                <div>
+                    <label>Nombre completo</label>
+                    <input id="nombre" required minlength="5">
+                </div>
+
+                <div>
+                    <label>Correo electrónico</label>
+                    <input id="correo" type="email" required>
+                </div>
+
+                <div>
+                    <label>Teléfono</label>
+                    <input id="telefono" required
+                           pattern="[0-9]{10}"
+                           title="Escribe 10 dígitos">
+                </div>
+
+                <div>
+                    <label>Edad</label>
+                    <input id="edad" type="number"
+                           min="18" max="99" required>
+                </div>
+
+                <div>
+                    <label>Curso</label>
+                    <select id="curso" required>
+                        <option value="">Selecciona...</option>
+                        <option>HTML y CSS</option>
+                        <option>JavaScript</option>
+                        <option>Python</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Modalidad</label>
+                    <select id="modalidad" required>
+                        <option value="">Selecciona...</option>
+                        <option>Presencial</option>
+                        <option>En línea</option>
+                    </select>
+                </div>
+
+            </div>
+
+            <br>
+
+            <button type="submit" id="guardar">
+                Guardar registro
+            </button>
+
+            <button type="button" id="cancelar"
+                    class="secundario" hidden>
+                Cancelar edición
+            </button>
+
+            <button type="reset" class="secundario">
+                Limpiar campos
+            </button>
+
+        </form>
+
+        <p id="mensaje"></p>
+
+    </section>
+
+    <section class="panel">
+
+        <h2>Listado de registros</h2>
+
+        <p>
+            <strong>online:</strong> Guardado en Supabase.
+            <br>
+            <strong>offline:</strong> Guardado localmente.
+        </p>
+
+        <button id="sincronizar" class="secundario">
+            Reintentar sincronización
+        </button>
+
+        <div class="tabla">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Correo</th>
+                        <th>Teléfono</th>
+                        <th>Edad</th>
+                        <th>Curso</th>
+                        <th>Modalidad</th>
+                        <th>Status</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody id="listado"></tbody>
+            </table>
+        </div>
+
+    </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+
+// 1. Configuracion supabase
+
+const SUPABASE_URL =
+    "https://zyqrokquoycvzutpopoi.supabase.co";
+
+const SUPABASE_KEY =
+    "sb_publishable_YrLR6rqT7zlgvMS2E8P_Lg_USe4TgjJ";
+
+const TABLA = "registros_cursos";
+const CLAVE_LOCAL = "registros_cursos_local";
+
+const cliente =
+    window.supabase &&
+    !SUPABASE_KEY.includes("PEGA_AQUI")
+    ? window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    )
+    : null;
+
+
+// 2. Variables
+
+const formulario = document.getElementById("registro");
+const listado = document.getElementById("listado");
+const mensaje = document.getElementById("mensaje");
+const conexion = document.getElementById("conexion");
+const guardar = document.getElementById("guardar");
+const cancelar = document.getElementById("cancelar");
+
+const CAMPOS = [
+    "nombre",
+    "correo",
+    "telefono",
+    "edad",
+    "curso",
+    "modalidad"
+];
+
+let editandoId = null;
+let sincronizando = false;
+let usuarioActual = null;
+// Conservamos los datos previos para enlazar registros antiguos cuando sea posible.
+let datosAntesDeEditar = null;
+
+
+
+// 3. Obtener registros
+function obtenerRegistros() {
+
+    let registros;
+
+    try {
+        registros = JSON.parse(
+            localStorage.getItem(CLAVE_LOCAL) || "[]"
+        );
+    } catch (error) {
+        console.error(error);
+        return [];
+    }
+
+    if (!Array.isArray(registros)) return [];
+
+    // Adaptar registros de la versión anterior
+    let actualizado = false;
+
+    registros = registros.map(r => {
+
+        if (r.clienteId && r.datos) {
+            if (r.operacion === "solo_local") r.operacion = "editar";
+            return r;
+        }
+
+        actualizado = true;
+
+        const datos = {};
+
+        CAMPOS.forEach(campo => {
+            datos[campo] = r.datos?.[campo] ?? r[campo] ?? "";
+        });
+
+        datos.status =
+            (r.datos?.status ?? r.status) === "online"
+                ? "online"
+                : "offline";
+
+        return {
+            clienteId: crypto.randomUUID(),
+            datos: datos,
+            operacion: datos.status === "online"
+                ? "ninguna"
+                : "guardar"
+        };
+    });
+
+    if (actualizado) {
+        guardarLocal(registros);
+    }
+
+    return registros;
+}
+
+
+// 4. Guardar en localstorage
+
+function guardarLocal(registros) {
+
+    localStorage.setItem(
+        CLAVE_LOCAL,
+        JSON.stringify(registros)
+    );
+
+}
+
+
+// 5. Obtener los datos del formulario
+
+function obtenerDatos() {
+
+    return {
+        nombre: document.getElementById("nombre").value.trim(),
+        correo: document.getElementById("correo").value.trim(),
+        telefono: document.getElementById("telefono").value.trim(),
+        edad: Number(document.getElementById("edad").value),
+        curso: document.getElementById("curso").value,
+        modalidad: document.getElementById("modalidad").value,
+        status: "offline"
+    };
+
+}
+
+
+// 6. Mostrar registros
+
+function mostrarRegistros() {
+
+    listado.replaceChildren();
+
+    const registros = obtenerRegistros();
+
+    registros.filter(r => r.operacion !== "eliminar").forEach(registro => {
+
+        const fila = listado.insertRow();
+
+        const datos = registro.datos;
+
+        [...CAMPOS, "status"].forEach(campo => {
+
+            const celda = fila.insertCell();
+
+            celda.textContent = datos[campo] ?? "";
+
+            if (campo === "status") {
+                celda.className = datos.status;
+            }
+
+        });
+
+        const acciones = fila.insertCell();
+
+        // Boton editar
+
+        const botonEditar = document.createElement("button");
+
+        botonEditar.textContent = "Editar";
+        botonEditar.className = "editar";
+
+        botonEditar.onclick = () => {
+            editarRegistro(registro.clienteId);
+        };
+
+        // Boton eliminar
+
+        const botonEliminar = document.createElement("button");
+
+        botonEliminar.textContent = "Eliminar";
+        botonEliminar.className = "eliminar";
+
+        botonEliminar.onclick = () => {
+            eliminarRegistro(registro.clienteId);
+        };
+
+        acciones.append(botonEditar, botonEliminar);
+
+    });
+
+    const eliminaciones = registros.filter(r => r.operacion === "eliminar").length;
+    if (eliminaciones) {
+        const fila = listado.insertRow();
+        const celda = fila.insertCell();
+        celda.colSpan = 8;
+        celda.textContent = `${eliminaciones} eliminación(es) pendiente(s) de confirmar en Supabase.`;
+    }
+
+}
+
+
+// 7. Editar registro
+
+function editarRegistro(id) {
+
+    const registros = obtenerRegistros();
+
+    const registro = registros.find(
+        r => r.clienteId === id
+    );
+
+    if (!registro) return;
+
+    editandoId = id;
+    datosAntesDeEditar = {...registro.datos};
+
+    CAMPOS.forEach(campo => {
+
+        document.getElementById(campo).value =
+            registro.datos[campo] ?? "";
+
+    });
+
+    guardar.textContent = "Guardar cambios";
+
+    cancelar.hidden = false;
+
+    mensaje.textContent =
+        "Modifica los datos y presiona Guardar cambios.";
+
+    formulario.scrollIntoView({
+        behavior: "smooth"
+    });
+
+}
+
+
+// 8. Eliminar registro
+
+function eliminarRegistro(id) {
+
+    if (!confirm("¿Seguro que deseas eliminar este registro?")) return;
+
+    const registros = obtenerRegistros();
+    const registro = registros.find(r => r.clienteId === id);
+    if (!registro) return;
+
+    if (registro.operacion === "guardar") {
+        // Todavía no fue confirmado en Supabase; cancelar el alta pendiente.
+        guardarLocal(registros.filter(r => r.clienteId !== id));
+    } else {
+        // Conservar un registro oculto hasta confirmar su borrado en Supabase.
+        registro.operacion = "eliminar";
+        registro.datos.status = "offline";
+        guardarLocal(registros);
+    }
+
+    if (editandoId === id) terminarEdicion();
+    mostrarRegistros();
+    mensaje.textContent = "Eliminación pendiente: se confirmará en Supabase cuando haya conexión y autorización.";
+    sincronizarPendientes();
+}
+
+
+// 9. Terminar edicion
+
+function terminarEdicion() {
+
+    editandoId = null;
+    datosAntesDeEditar = null;
+
+    guardar.textContent = "Guardar registro";
+
+    cancelar.hidden = true;
+
+    formulario.reset();
+
+}
+
+
+// 10. Guardar datos o cambios
+
+formulario.addEventListener("submit", async function(evento) {
+
+    evento.preventDefault();
+
+    if (!formulario.reportValidity()) return;
+
+    const datos = obtenerDatos();
+
+    const registros = obtenerRegistros();
+
+    const fueEdicion = editandoId !== null;
+
+    if (fueEdicion) {
+
+        const registro = registros.find(
+            r => r.clienteId === editandoId
+        );
+
+        if (!registro) return;
+
+        // Registrar la edición como pendiente, para enviarla a Supabase.
+        if (!registro.datosOriginales && datosAntesDeEditar) {
+            registro.datosOriginales = {...datosAntesDeEditar};
+        }
+        registro.datos = datos;
+        registro.operacion = registro.operacion === "guardar" ? "guardar" : "editar";
+
+    } else {
+
+        registros.push({
+            clienteId: crypto.randomUUID(),
+            datos: datos,
+            operacion: "guardar"
+        });
+
+    }
+
+    try {
+        guardarLocal(registros);
+    } catch (error) {
+        mensaje.textContent =
+            "No se pudo guardar en localStorage.";
+        return;
+    }
+
+    terminarEdicion();
+
+    mostrarRegistros();
+
+    if (fueEdicion) {
+
+        mensaje.textContent =
+            "Edición guardada localmente; se intentará actualizar en Supabase.";
+
+    } else {
+
+        mensaje.textContent =
+            "Registro guardado localmente.";
+
+    }
+
+    await sincronizarPendientes();
+
+});
+
+
+// 11. Sincronizar registros nuevos y editados con Supabase.
+// No se marca online hasta que el servidor confirma el cambio.
+async function sincronizarPendientes() {
+    if (sincronizando) return;
+    if (!navigator.onLine) {
+        mensaje.textContent = "Sin internet: cambios guardados en localStorage.";
+        return;
+    }
+    if (!cliente) {
+        mensaje.textContent = "Falta configurar la conexión a Supabase.";
+        return;
+    }
+    if (!usuarioActual) {
+        mensaje.textContent = "Los cambios están guardados localmente. Inicia sesión para sincronizarlos.";
+        return;
+    }
+    sincronizando = true;
+    let huboError = false;
+    try {
+        for (const pendiente of obtenerRegistros().filter(r => ["guardar", "editar", "solo_local", "eliminar"].includes(r.operacion))) {
+            try {
+                let idRemoto = pendiente.clienteId;
+                if (pendiente.operacion === "eliminar") {
+                    // Nunca borrar filas de otro usuario ni asumir éxito si afectó cero.
+                    const { data: borrados, error } = await cliente.from(TABLA)
+                        .delete()
+                        .eq("cliente_id", idRemoto)
+                        .eq("owner_id", usuarioActual.id)
+                        .select("cliente_id");
+                    if (error) throw error;
+                    if (!borrados || borrados.length !== 1) {
+                        throw new Error("No se pudo eliminar en Supabase: el registro no pertenece a esta sesión o es antiguo sin owner_id.");
+                    }
+                } else if (pendiente.operacion === "guardar") {
+                    const { error } = await cliente.from(TABLA).upsert({
+                        ...pendiente.datos, status: "online",
+                        cliente_id: idRemoto, owner_id: usuarioActual.id
+                    }, { onConflict: "cliente_id" });
+                    if (error) throw error;
+                } else {
+                    // Si el registro era anterior a esta versión, recuperar su ID real.
+                    const { data: existente, error: buscarError } = await cliente.from(TABLA)
+                        .select("cliente_id")
+                        .eq("cliente_id", idRemoto)
+                        .eq("owner_id", usuarioActual.id);
+                    if (buscarError) throw buscarError;
+                    if (existente.length === 0 && pendiente.datosOriginales) {
+                        let consulta = cliente.from(TABLA).select("cliente_id")
+                            .eq("owner_id", usuarioActual.id);
+                        for (const campo of CAMPOS) {
+                            consulta = consulta.eq(campo, pendiente.datosOriginales[campo]);
+                        }
+                        const { data: candidatos, error: buscarAntiguoError } = await consulta;
+                        if (buscarAntiguoError) throw buscarAntiguoError;
+                        if (candidatos.length === 1) idRemoto = candidatos[0].cliente_id;
+                    }
+                    // SELECT previo: la actualización debe afectar exactamente un registro.
+                    const { data: actualizados, error } = await cliente.from(TABLA)
+                        .update({
+                            nombre: pendiente.datos.nombre,
+                            correo: pendiente.datos.correo,
+                            telefono: pendiente.datos.telefono,
+                            edad: pendiente.datos.edad,
+                            curso: pendiente.datos.curso,
+                            modalidad: pendiente.datos.modalidad,
+                            status: "online"
+                        })
+                        .eq("cliente_id", idRemoto)
+                        .eq("owner_id", usuarioActual.id)
+                        .select("cliente_id");
+                    if (error) throw error;
+                    if (actualizados.length !== 1) throw new Error("No se encontró el registro en Supabase para este usuario. Puede ser un registro antiguo sin owner_id.");
+                }
+                const actuales = obtenerRegistros();
+                const encontrado = actuales.find(r => r.clienteId === pendiente.clienteId);
+                if (encontrado && encontrado.operacion === pendiente.operacion &&
+                    JSON.stringify(encontrado.datos) === JSON.stringify(pendiente.datos)) {
+                    if (pendiente.operacion === "eliminar") {
+                        guardarLocal(actuales.filter(r => r.clienteId !== pendiente.clienteId));
+                    } else {
+                        encontrado.clienteId = idRemoto;
+                        encontrado.datos.status = "online";
+                        encontrado.operacion = "ninguna";
+                        delete encontrado.datosOriginales;
+                        guardarLocal(actuales);
+                    }
+                }
+            } catch (error) {
+                console.error("No se pudo sincronizar:", error);
+                huboError = true;
+                mensaje.textContent = "Quedaron cambios offline: " + error.message;
+            }
+        }
+    } finally {
+        sincronizando = false;
+        mostrarRegistros();
+    }
+    const siguenPendientes = obtenerRegistros().some(r => ["guardar", "editar", "solo_local", "eliminar"].includes(r.operacion));
+    if (!siguenPendientes && !huboError) {
+        mensaje.textContent = "Cambios confirmados en Supabase. Registros guardados: online; eliminaciones confirmadas.";
+    }
+}
+
+// Autenticación sin añadir campos al formulario original.
+// Las ventanas solo se muestran al solicitar sincronización manual.
+async function iniciarSesionDesdeVentana() {
+    if (!cliente) {
+        mensaje.textContent = "Falta configurar Supabase.";
+        return false;
+    }
+    if (usuarioActual) return true;
+    const email = prompt("Correo de tu usuario de Supabase:");
+    if (email === null) return false;
+    const password = prompt("Contraseña de Supabase (no se guardará en el formulario):");
+    if (password === null) return false;
+    const {data, error} = await cliente.auth.signInWithPassword({
+        email: email.trim(), password
+    });
+    if (error) {
+        mensaje.textContent = "No se pudo iniciar sesión: " + error.message;
+        return false;
+    }
+    usuarioActual = data.user;
+    mensaje.textContent = "Sesión iniciada. Sincronizando cambios...";
+    return true;
+}
+async function recuperarSesion() {
+    if (cliente) {
+        const {data, error} = await cliente.auth.getUser();
+        if (!error) usuarioActual = data.user;
+    }
+    if (usuarioActual && navigator.onLine) await sincronizarPendientes();
+}
+
+// 12. Detectar internet
+
+function actualizarConexion() {
+
+    if (navigator.onLine) {
+
+        conexion.textContent = "Posiblemente conectado";
+        conexion.className = "online";
+
+    } else {
+
+        conexion.textContent = "Sin conexión";
+        conexion.className = "offline";
+
+    }
+
+}
+
+
+// 13. Eventos
+
+window.addEventListener("online", function() {
+
+    actualizarConexion();
+    sincronizarPendientes();
+
+});
+
+window.addEventListener("offline", actualizarConexion);
+
+document.getElementById("sincronizar").onclick = async function () {
+    if (await iniciarSesionDesdeVentana()) await sincronizarPendientes();
+};
+
+cancelar.onclick = terminarEdicion;
+
+formulario.addEventListener("reset", function() {
+
+    editandoId = null;
+    guardar.textContent = "Guardar registro";
+    cancelar.hidden = true;
+
+});
+
+
+// 14. Iniciar programa
+
+actualizarConexion();
+
+mostrarRegistros();
+
+recuperarSesion();
+
+</script>
+
+</body>
+</html>
